@@ -1,153 +1,163 @@
 # PeakReady
 
-PeakReady is a mobile app built with React Native and Expo that allows athletes to log daily recovery metrics and calculate a readiness score from 0–100.
-
-The goal of the project was to demonstrate clean architecture, separation of concerns, persistence, and testable business logic in a simple mobile app.
+Athletes log daily recovery metrics and get a 0–100 readiness score to guide training and recovery.
 
 ---
 
-## 🚀 Features
+## Screenshots
 
-- Log daily recovery metrics:
-  - Sleep (hours)
-  - Workout intensity (1–10)
-  - Muscle soreness (1–10)
-- Automatic readiness score calculation
-- Dynamic UI states (color zones + emoji indicators)
-- Local persistence using AsyncStorage
-- History screen with delete functionality (basic CRUD)
-- Unit tests for scoring logic using Jest
+<!-- Add app screenshots here (e.g. Dashboard, Log Today, Timeline) -->
 
 ---
 
-## 🧠 Readiness Logic
+## Features
 
-The readiness score is calculated in a pure TypeScript function located in `utils/readiness.ts`.
-
-Calculation model:
-- Sleep increases readiness
-- Intensity applies a penalty
-- Soreness applies a penalty
-- Final score is clamped between 0–100
-
-The scoring logic is isolated from UI and storage, making it:
-- Deterministic
-- Easily testable
-- Reusable
-- Safe to refactor independently
-
-Unit tests validate:
-- Strong recovery cases
-- Overtraining scenarios
-- Boundary constraints (never < 0, never > 100)
+- **Daily check-in** — Log sleep (0–24h), workout intensity (1–10), and muscle soreness (1–10) with validation and quick-select chips.
+- **Readiness score** — Pure, deterministic calculation (0–100) with color zones (green / yellow / red) and short insight copy.
+- **Dashboard** — Circular readiness ring, zone pill, and primary actions (Log Today, View Timeline, Sign Out).
+- **Timeline** — List of past logs by date with score pills and per-entry delete.
+- **Auth** — Sign in / sign up with Supabase Auth; session persisted via AsyncStorage; unauthenticated users redirected to sign-in.
+- **Backend** — Supabase Postgres for daily logs; Row Level Security (RLS) so users only see and modify their own rows.
 
 ---
 
-## 🏗 Architecture
+## Tech stack
 
-app/
-index.tsx → Home dashboard (loads today’s log and displays readiness)
-log.tsx → Input form for daily metrics
-history.tsx → List + delete previous logs
-
-utils/
-readiness.ts → Pure scoring logic
-storage.ts → AsyncStorage abstraction layer
-
-tests/
-readiness.test.ts
-
-
-### Architectural Principles Used
-
-**Separation of Concerns**
-- UI components render state only.
-- Business logic lives in pure utility functions.
-- Storage access is abstracted behind helper functions.
-
-**File-Based Routing**
-- Implemented using Expo Router.
-- Each file inside `app/` automatically becomes a route.
-
-**Persistence Abstraction**
-- Screens do not directly interact with AsyncStorage.
-- All persistence logic lives inside `utils/storage.ts`.
-- This allows easy future migration to a backend API.
-
-**Testability**
-- Core readiness logic is isolated and covered by Jest tests.
-- No UI dependencies in business logic.
+| Layer        | Technology |
+|-------------|------------|
+| Runtime     | React Native (Expo SDK 54) |
+| Routing     | Expo Router (file-based) |
+| Language    | TypeScript |
+| Styling     | NativeWind (Tailwind) + React Native `StyleSheet` |
+| Backend     | Supabase (Auth + Postgres) |
+| Client      | `@supabase/supabase-js` |
+| Testing     | Jest + ts-jest |
 
 ---
 
-## 📦 Tech Stack
+## Architecture
 
-- React Native
-- Expo
-- Expo Router
-- TypeScript
-- AsyncStorage
-- Jest + ts-jest
+- **UI** — Screens in `app/` (dashboard, log form, history, auth). Reusable components in `components/` (e.g. `GlassCard`, `ReadinessRing`, `MetricChip`). No business or persistence logic in UI.
+- **Business logic** — Readiness calculation lives in `utils/readiness.ts`: pure function `calculateReadiness(metrics)`, no I/O. Used by dashboard and history; covered by Jest.
+- **Data layer** — `data/logs.ts` exposes `fetchLogs`, `upsertDailyLog`, `deleteLogByDate`, `todayId`. All Supabase access for logs goes through this module; screens never touch the Supabase client for log CRUD.
+- **Auth / client** — `lib/supabase.ts` creates the Supabase client with env URL/anon key and AsyncStorage for session persistence. Auth state in root layout drives redirects (signed-out → sign-in; signed-in on auth routes → dashboard).
 
----
-
-## 🔄 Data Flow
-
-1. User logs metrics in `log.tsx`
-2. Metrics are validated and saved via `saveLog()` (storage abstraction)
-3. Home screen uses `useFocusEffect` to reload today's log
-4. `calculateReadiness()` computes the score
-5. UI updates dynamically based on readiness zone
-6. History screen reads all logs and recalculates scores
-7. Logs can be deleted via `deleteLog()` (CRUD support)
+Separation of concerns: UI renders state; readiness is a pure util; persistence and auth are behind `data/logs` and `lib/supabase`.
 
 ---
 
-## 🛠 Running Locally
+## Backend (Supabase + RLS)
 
-Install dependencies:
+- **Auth** — Supabase Auth (email/password). Session is persisted in AsyncStorage and used for all API calls.
+- **Postgres** — One table used by the app: `daily_logs` (see Database setup below).
+- **RLS** — Policies ensure each user can only `SELECT`, `INSERT`, `UPDATE`, and `DELETE` rows where `user_id = auth.uid()`. The app never sends user id in request body for logs; it is set server-side or via RLS.
 
-```bash
-npm install
-Start the development server:
+---
 
-npx expo start
-Open in:
+## Environment setup
 
-iOS Simulator
+Create a `.env` in the project root (see `.env.example`). Required variables:
 
-Android Emulator
+| Variable | Description |
+|----------|-------------|
+| `EXPO_PUBLIC_SUPABASE_URL` | Supabase project URL (e.g. `https://<ref>.supabase.co`) |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | Supabase anonymous (public) key |
 
-Expo Go app
+Do not commit `.env`. The app reads these at build/runtime for the Supabase client.
 
-🧪 Run Tests
-npm test
-All readiness scoring logic is covered by unit tests.
+---
 
-🔮 Future Improvements
-Multiple logs per day (timestamp-based entries)
+## Local development
 
-Readiness trend visualization (charts)
+1. **Clone and install**
 
-Backend sync for multi-device support
+   ```bash
+   cd peakready
+   npm install
+   ```
 
-Authentication layer
+2. **Configure env**
 
-Performance analytics
+   ```bash
+   cp .env.example .env
+   # Edit .env with your EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY
+   ```
 
-Export/share functionality
+3. **Start dev server**
 
-📌 Why This Project
-This project was built to demonstrate:
+   ```bash
+   npx expo start
+   ```
 
-Structured mobile application architecture
+   Then open iOS simulator (`i`), Android emulator (`a`), or scan with Expo Go.
 
-Clean separation between UI, logic, and storage
+4. **Run from project root**
 
-Type-safe development with TypeScript
+   All commands (install, start, test) must be run from the `peakready` directory (where `package.json` and `app/` live).
 
-Test-driven thinking around business rules
+---
 
-Basic CRUD implementation
+## Database setup
 
-Scalable design for future backend integration
+Create the table and enable RLS in the Supabase SQL editor.
+
+**Table**
+
+```sql
+create table public.daily_logs (
+  user_id  uuid not null references auth.users(id) on delete cascade,
+  log_date date not null,
+  sleep    numeric not null,
+  intensity numeric not null,
+  soreness numeric not null,
+  primary key (user_id, log_date)
+);
+
+-- Optional: index for listing by user and date
+create index idx_daily_logs_user_date on public.daily_logs (user_id, log_date desc);
+```
+
+**RLS**
+
+- Enable RLS on `public.daily_logs`.
+- Policy: allow `SELECT`, `INSERT`, `UPDATE`, `DELETE` where `auth.uid() = user_id`.
+
+Example (adjust to your policy names):
+
+```sql
+alter table public.daily_logs enable row level security;
+
+create policy "Users can manage own logs"
+  on public.daily_logs
+  for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+```
+
+---
+
+## Testing
+
+- **Run tests**
+
+  ```bash
+  npm test
+  ```
+
+- **Scope** — Jest is used for business logic only. The readiness module (`utils/readiness.ts`) is tested in `__tests__/readiness.test.ts` (strong recovery, overtraining, and bounds: score never &lt; 0 or &gt; 100). No UI or Supabase in tests.
+
+---
+
+## Future improvements
+
+- Multiple entries per day (timestamped logs).
+- Readiness trend charts and historical insights.
+- Optional push notifications or reminders.
+- Export or share readiness summary.
+- Offline support with sync when back online.
+
+---
+
+## License
+
+Proprietary. All rights reserved.
