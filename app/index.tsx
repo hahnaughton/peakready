@@ -1,49 +1,41 @@
-import { View, Text, Pressable } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Link, useFocusEffect } from "expo-router";
 import { useCallback, useState } from "react";
 import { calculateReadiness } from "../utils/readiness";
-import { getLogs, todayId } from "../utils/storage";
-
-function zoneFromScore(score: number) {
-  if (score >= 70) return "GREEN";
-  if (score >= 40) return "YELLOW";
-  return "RED";
-}
-
-function borderColorForZone(zone: "GREEN" | "YELLOW" | "RED") {
-  if (zone === "GREEN") return "green";
-  if (zone === "YELLOW") return "goldenrod";
-  return "crimson";
-}
-
-function emojiForZone(zone: "GREEN" | "YELLOW" | "RED") {
-  if (zone === "GREEN") return "🔥";
-  if (zone === "YELLOW") return "⚠️";
-  return "🧊";
-}
-
-function tintForZone(zone: "GREEN" | "YELLOW" | "RED") {
-  if (zone === "GREEN") return "rgba(0,128,0,0.08)";
-  if (zone === "YELLOW") return "rgba(218,165,32,0.10)";
-  return "rgba(220,20,60,0.08)";
-}
+import { ReadinessRing } from "../components/ReadinessRing";
+import {
+  quickInsight,
+  zoneEmoji,
+  zoneFromScore,
+  zoneLabel,
+} from "../lib/designSystem";
+import { fetchLogs, todayId } from "../data/logs";
+import { supabase } from "../lib/supabase";
 
 export default function Home() {
   const [score, setScore] = useState<number | null>(null);
 
   const loadToday = useCallback(async () => {
-    const logs = await getLogs();
-    const today = todayId();
-    const todaysLog = logs.find((l) => l.id === today);
+    try {
+      const logs = await fetchLogs();
+      const today = todayId();
+      const todaysLog = logs.find((l) => l.logDate === today);
 
-    if (!todaysLog) {
+      if (!todaysLog) {
+        setScore(null);
+        return;
+      }
+
+      const s = calculateReadiness(todaysLog.metrics);
+      setScore(s);
+    } catch {
       setScore(null);
-      return;
     }
-
-    const s = calculateReadiness(todaysLog.metrics);
-    setScore(s);
   }, []);
+
+  async function onSignOut() {
+    await supabase.auth.signOut();
+  }
 
   useFocusEffect(
     useCallback(() => {
@@ -52,76 +44,137 @@ export default function Home() {
   );
 
   const displayScore = score ?? 0;
-  const zone = score === null ? "YELLOW" : zoneFromScore(displayScore);
-  const borderColor = borderColorForZone(zone);
-  const tint = tintForZone(zone);
-  const emoji = emojiForZone(zone);
-
-  const statusText =
-    score === null
-      ? "Log today to get a score"
-      : zone === "GREEN"
-        ? "Peak ready"
-        : zone === "YELLOW"
-          ? "Moderate"
-          : "Recover";
+  const hasScore = score !== null;
+  const zone = zoneFromScore(displayScore);
+  const insight = quickInsight(score);
+  const zoneAccent = zone === "GREEN" ? "#84CC16" : zone === "YELLOW" ? "#FBBF24" : "#FB7185";
 
   return (
-    <View style={{ flex: 1, padding: 24, gap: 16 }}>
-      <Text style={{ fontSize: 28, fontWeight: "700" }}>Today</Text>
+    <View style={styles.screen}>
+      <View style={styles.container}>
+        <View style={styles.headerWrap}>
+          <Text style={styles.caption}>PeakReady 2.0</Text>
+          <Text style={styles.title}>Readiness OS</Text>
+        </View>
 
-      <View
-        style={{
-          padding: 20,
-          borderRadius: 16,
-          borderWidth: 2,
-          borderColor,
-          backgroundColor: tint,
-          shadowColor: "#000",
-          shadowOpacity: 0.12,
-          shadowRadius: 10,
-          shadowOffset: { width: 0, height: 6 },
-          elevation: 3,
-        }}
-      >
-        <Text style={{ fontSize: 18, fontWeight: "600" }}>
-          Readiness Score {emoji}
-        </Text>
+        <View style={styles.primaryCard}>
+          <ReadinessRing score={score} />
+          <View style={styles.zonePillWrap}>
+            <View
+              style={[
+                styles.zonePill,
+                hasScore
+                  ? { borderColor: `${zoneAccent}99`, backgroundColor: `${zoneAccent}26` }
+                  : { borderColor: "rgba(255,255,255,0.24)", backgroundColor: "rgba(255,255,255,0.1)" },
+              ]}
+            >
+              <Text style={[styles.zonePillText, hasScore ? { color: zoneAccent } : { color: "#E2E8F0" }]}>
+                {hasScore ? `${zoneEmoji(zone)} ${zoneLabel(zone)}` : "No score yet"}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.insightText}>{insight}</Text>
+        </View>
 
-        <Text style={{ fontSize: 48, fontWeight: "800" }}>
-          {score === null ? "--" : displayScore}
-        </Text>
-
-        <Text style={{ fontSize: 16 }}>{statusText}</Text>
-      </View>
-
-      <Link href="/log" asChild>
-        <Pressable
-          style={{
-            padding: 16,
-            borderRadius: 12,
-            backgroundColor: "black",
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ color: "white", fontWeight: "700" }}>
-            Log Workout
+        <View style={styles.secondaryCard}>
+          <Text style={styles.quickLabel}>Quick Insight</Text>
+          <Text style={styles.quickBody}>
+            {score === null
+              ? "Your dashboard is waiting for today’s check-in."
+              : "Use your score to guide intensity and recovery choices."}
           </Text>
-        </Pressable>
-      </Link>
+        </View>
 
-      <Link href="/history" asChild>
-        <Pressable
-          style={{
-            padding: 16,
-            borderRadius: 12,
-            borderWidth: 1,
-            alignItems: "center",
-          }}
-        >
-          <Text style={{ fontWeight: "700" }}>View History</Text>
+        <Link href="/log" asChild>
+          <Pressable style={styles.primaryButton}>
+            <Text style={styles.primaryButtonText}>Log Today</Text>
+          </Pressable>
+        </Link>
+
+        <Link href="/history" asChild>
+          <Pressable style={styles.secondaryButton}>
+            <Text style={styles.secondaryButtonText}>View Timeline</Text>
+          </Pressable>
+        </Link>
+
+        <Pressable onPress={onSignOut} style={styles.signOutButton}>
+          <Text style={styles.signOutText}>Sign Out</Text>
         </Pressable>
-      </Link>
+      </View>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#060913" },
+  container: { flex: 1, paddingHorizontal: 24, paddingTop: 24, gap: 16 },
+  headerWrap: { gap: 4 },
+  caption: { color: "rgba(255,255,255,0.72)", fontSize: 13 },
+  title: { color: "#FFFFFF", fontSize: 31, fontWeight: "700" },
+  primaryCard: {
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(34,211,238,0.4)",
+    backgroundColor: "#10182A",
+    alignItems: "center",
+    paddingTop: 24,
+    paddingHorizontal: 14,
+    paddingBottom: 20,
+    gap: 18,
+  },
+  zonePillWrap: {
+    marginTop: 4,
+    alignItems: "center",
+  },
+  zonePill: {
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+  },
+  zonePillText: { fontWeight: "700", fontSize: 15 },
+  insightText: {
+    color: "rgba(255,255,255,0.84)",
+    textAlign: "center",
+    paddingHorizontal: 12,
+    lineHeight: 22,
+    fontSize: 14,
+  },
+  secondaryCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    padding: 14,
+    gap: 8,
+  },
+  quickLabel: { color: "rgba(255,255,255,0.68)", fontSize: 12, letterSpacing: 0.7, textTransform: "uppercase" },
+  quickBody: { color: "rgba(255,255,255,0.93)", fontSize: 16, lineHeight: 22 },
+  primaryButton: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34,211,238,0.55)",
+    backgroundColor: "rgba(34,211,238,0.2)",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  primaryButtonText: { color: "#22D3EE", fontWeight: "700", fontSize: 16 },
+  secondaryButton: {
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    backgroundColor: "rgba(255,255,255,0.1)",
+    alignItems: "center",
+    paddingVertical: 14,
+  },
+  secondaryButtonText: { color: "rgba(255,255,255,0.95)", fontWeight: "700", fontSize: 16 },
+  signOutButton: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.07)",
+    alignItems: "center",
+    paddingVertical: 12,
+  },
+  signOutText: { color: "rgba(255,255,255,0.82)", fontWeight: "600" },
+});
