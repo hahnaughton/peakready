@@ -105,16 +105,13 @@ Create the table and enable RLS in the Supabase SQL editor.
 
 ```sql
 create table public.daily_logs (
-  user_id  uuid not null references auth.users(id) on delete cascade,
-  log_date date not null,
-  sleep    numeric not null,
+  user_id   uuid not null references auth.users(id) on delete cascade,
+  log_date  date not null,
+  sleep     numeric not null,
   intensity numeric not null,
-  soreness numeric not null,
+  soreness  numeric not null,
   primary key (user_id, log_date)
 );
-
--- Optional: index for listing by user and date
-create index idx_daily_logs_user_date on public.daily_logs (user_id, log_date desc);
 ```
 
 **RLS**
@@ -155,9 +152,3 @@ create policy "Users can manage own logs"
 - Optional push notifications or reminders.
 - Export or share readiness summary.
 - Offline support with sync when back online.
-
----
-
-## License
-
-Proprietary. All rights reserved.
