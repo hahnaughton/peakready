@@ -16,7 +16,7 @@ export default function SignUpScreen() {
     }
 
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
     });
@@ -27,7 +27,10 @@ export default function SignUpScreen() {
       return;
     }
 
-    Alert.alert("Check your inbox", "Confirm your email, then sign in.");
+    // Only prompt to check inbox when Supabase requires email confirmation (no session returned).
+    if (!data.session) {
+      Alert.alert("Check your inbox", "Confirm your email, then sign in.");
+    }
   }
 
   return (
